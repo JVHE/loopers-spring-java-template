@@ -17,24 +17,26 @@ import com.loopers.infrastructure.user.UserJpaRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import com.loopers.utils.DatabaseCleanUp;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
-@Transactional
 @DisplayName("주문 Facade(OrderFacade) 통합 테스트")
 public class OrderFacadeIntegrationTest {
+    @Autowired
+    private PlatformTransactionManager transactionManager;  // 추가: TransactionTemplate俑
 
     @Autowired
     private OrderFacade orderFacade;
@@ -142,6 +144,51 @@ public class OrderFacadeIntegrationTest {
             assertThat(orderInfo.orderId()).isNotNull();
             assertThat(orderInfo.items()).hasSize(2);
             assertThat(orderInfo.totalPrice()).isEqualTo(40000);
+        }
+
+        @DisplayName("동시에 주문해도 재고가 정상적으로 차감된다.")
+        @Test
+        void concurrencyTest_stockShouldBeProperlyDecreasedWhenOrdersCreated() throws InterruptedException {
+            // arrange
+            OrderRequest request = new OrderRequest(
+                    List.of(
+                            new OrderItemRequest(productId1, 1) // 재고 100
+                    )
+            );
+            int threadCount = 10;
+            CountDownLatch latch = new CountDownLatch(threadCount);
+
+            // userId 확인
+            System.out.println("userId: " + userId);
+            System.out.println("userEntityId: " + userEntityId);
+
+            // act
+            try (ExecutorService executor = Executors.newFixedThreadPool(threadCount)) {
+                for (int i = 0; i < threadCount; i++) {
+                    executor.submit(() -> {
+                        TransactionTemplate template = new TransactionTemplate(transactionManager);
+                        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);  // 새 트랜잭션 강제
+                        template.execute(status -> {
+                            try {
+                                orderFacade.createOrder(userId, request);
+                            } catch (Exception e) {
+                                System.out.println("실패: " + e.getMessage());
+                                status.setRollbackOnly();  // 예외 시 명시 롤백
+                            }
+                            return null;
+                        });
+                        latch.countDown();
+                    });
+                }
+            }
+
+            latch.await();
+
+            // assert
+            Supply supply = supplyJpaRepository.findByProductId(productId1).orElseThrow();
+            assertThat(supply.getStock().quantity()).isEqualTo(90);
+            Point point = pointJpaRepository.findByUserId(userEntityId).orElseThrow();
+            assertThat(point.getAmount()).isEqualTo(0); // 10,000원 * 10건
         }
 
         @DisplayName("존재하지 않는 상품 ID가 포함된 경우, 예외가 발생한다. (Exception)")

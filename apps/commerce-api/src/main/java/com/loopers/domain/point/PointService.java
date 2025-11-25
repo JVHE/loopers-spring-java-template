@@ -21,7 +21,7 @@ public class PointService {
 
     @Transactional
     public Long chargePoint(Long userId, int amount) {
-        Point point = pointRepository.findByUserId(userId)
+        Point point = pointRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "포인트 정보를 찾을 수 없습니다."));
         point.charge(amount);
         pointRepository.save(point);
@@ -35,7 +35,7 @@ public class PointService {
 
     @Transactional
     public void checkAndDeductPoint(Long userId, Integer totalAmount) {
-        Point point = pointRepository.findByUserId(userId).orElseThrow(
+        Point point = pointRepository.findByUserIdForUpdate(userId).orElseThrow(
                 () -> new CoreException(ErrorType.NOT_FOUND, "포인트 정보를 찾을 수 없습니다.")
         );
         point.deduct(totalAmount);
