@@ -1,5 +1,6 @@
 package com.loopers.domain.point;
 
+import com.loopers.domain.common.vo.Price;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +35,11 @@ public class PointService {
     }
 
     @Transactional
-    public void checkAndDeductPoint(Long userId, Integer totalAmount) {
+    public void checkAndDeductPoint(Long userId, Price price) {
         Point point = pointRepository.findByUserIdForUpdate(userId).orElseThrow(
                 () -> new CoreException(ErrorType.NOT_FOUND, "포인트 정보를 찾을 수 없습니다.")
         );
-        point.deduct(totalAmount);
+        point.deduct(price.amount());
         pointRepository.save(point);
     }
 }
