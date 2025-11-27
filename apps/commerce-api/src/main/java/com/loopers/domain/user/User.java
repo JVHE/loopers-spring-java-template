@@ -30,8 +30,9 @@ public class User extends BaseEntity {
     }
 
     public static User create(String userId, String email, String birthday, String gender) {
-        // ID 가 영문 및 숫자 10자 이내 형식에 맞지 않으면, User 객체 생성에 실패한다.
-        if (StringUtils.isBlank(userId) || !userId.matches("^(?=.*[a-zA-Z])(?=.*\\d)[a-zA-Z\\d]{1,10}$")) {
+        // ID는 영문이 최소 1개 포함되어야 하며, 영문과 숫자만 사용 가능 (1-10자)
+        // 영문 only는 가능하지만, 숫자 only는 불가능
+        if (StringUtils.isBlank(userId) || !userId.matches("^(?=.*[a-zA-Z])[a-zA-Z\\d]{1,10}$")) {
             throw new CoreException(ErrorType.BAD_REQUEST, "ID는 영문 및 숫자 10자 이내여야 합니다.");
         }
         // 이메일이 xx@yy.zz 형식에 맞지 않으면, User 객체 생성에 실패한다.
