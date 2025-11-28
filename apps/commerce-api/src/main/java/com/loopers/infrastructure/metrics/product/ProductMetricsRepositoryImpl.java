@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -28,5 +29,15 @@ public class ProductMetricsRepositoryImpl implements ProductMetricsRepository {
     @Override
     public Page<ProductMetrics> findAll(Pageable pageable) {
         return jpaRepository.findAll(pageable);
+    }
+
+    @Override
+    public ProductMetrics save(ProductMetrics productMetrics) {
+        return jpaRepository.save(productMetrics);
+    }
+
+    @Override
+    public List<ProductMetrics> saveAll(Collection<ProductMetrics> list) {
+        return jpaRepository.saveAll(list);
     }
 }

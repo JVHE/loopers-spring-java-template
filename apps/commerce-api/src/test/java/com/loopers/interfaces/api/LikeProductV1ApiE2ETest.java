@@ -100,7 +100,7 @@ public class LikeProductV1ApiE2ETest {
         productMetricsJpaRepository.save(metrics1);
         // Supply 등록
         Supply supply1 = Supply.create(productId1, new Stock(100));
-        supplyService.saveSupply(supply1);
+        supplyService.save(supply1);
 
         Product product2 = createProduct("상품2", brandId, 20000);
         Product savedProduct2 = productJpaRepository.save(product2);
@@ -110,7 +110,7 @@ public class LikeProductV1ApiE2ETest {
         productMetricsJpaRepository.save(metrics2);
         // Supply 등록
         Supply supply2 = Supply.create(productId2, new Stock(200));
-        supplyService.saveSupply(supply2);
+        supplyService.save(supply2);
     }
 
 

@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
@@ -50,5 +51,15 @@ public class ProductService {
 
     public boolean existsById(Long productId) {
         return productRepository.existsById(productId);
+    }
+
+    @Transactional
+    public Product save(Product product) {
+        return productRepository.save(product);
+    }
+
+    @Transactional
+    public List<Product> saveAll(Collection<Product> products) {
+        return productRepository.saveAll(products);
     }
 }

@@ -6,8 +6,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -35,5 +37,26 @@ public class ProductMetricsService {
             throw new CoreException(ErrorType.BAD_REQUEST, "지원하지 않는 정렬 방식입니다.");
         }
         return productMetricsRepository.findAll(pageable);
+    }
+
+    public ProductMetrics save(ProductMetrics productMetrics) {
+        return productMetricsRepository.save(productMetrics);
+    }
+
+    @Transactional
+    public void incrementLikeCount(Long productId) {
+        ProductMetrics productMetrics = getMetricsByProductId(productId);
+        productMetrics.incrementLikeCount();
+        productMetricsRepository.save(productMetrics);
+    }
+
+    public void decrementLikeCount(Long productId) {
+        ProductMetrics productMetrics = getMetricsByProductId(productId);
+        productMetrics.decrementLikeCount();
+        productMetricsRepository.save(productMetrics);
+    }
+
+    public List<ProductMetrics> saveAll(Collection<ProductMetrics> list) {
+        return productMetricsRepository.saveAll(list);
     }
 }

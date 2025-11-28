@@ -9,6 +9,12 @@ import lombok.Getter;
 
 @Entity
 @Table(name = "tb_product_metrics")
+@Table(
+    name = "tb_product_metrics",
+    indexes = {
+        @Index(name = "idx_product_metrics_like_count", columnList = "like_count")
+    }
+)
 @Getter
 public class ProductMetrics extends BaseEntity {
     // 현재는 상품의 좋아요 수만 관리하지만, 추후에 다른 메트릭들도 추가될 수 있습니다.

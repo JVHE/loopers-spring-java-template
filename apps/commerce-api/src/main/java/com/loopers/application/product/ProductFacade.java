@@ -19,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,13 +33,79 @@ public class ProductFacade {
     private final BrandService brandService;
     private final SupplyService supplyService;
 
+    @Transactional
+    public ProductInfo createProduct(ProductCreateRequest request) {
+        Brand brand = brandService.getBrandById(request.brandId());
+
+        Product product = Product.create(request.name(), brand.getId(), request.price());
+        product = productService.save(product);
+
+        productMetricsService.save(ProductMetrics.create(product.getId(), request.likeCount()));
+        supplyService.save(Supply.create(product.getId(), request.stock()));
+
+        return new ProductInfo(
+                product.getId(),
+                product.getName(),
+                brand.getName(),
+                product.getPrice().amount(),
+                0,
+                request.stock().quantity()
+        );
+    }
+
+    @Transactional
+    public List<ProductInfo> createProductBulk(List<ProductCreateRequest> requests) {
+        List<Long> brandIds = requests.stream().map(ProductCreateRequest::brandId).distinct().toList();
+        Map<Long, Brand> brandMap = brandService.getBrandMapByBrandIds(brandIds);
+        if (brandMap.size() != brandIds.size()) {
+            throw new CoreException(ErrorType.NOT_FOUND, "일부 브랜드를 찾을 수 없습니다.");
+        }
+
+        List<Product> products = productService.saveAll(requests.stream()
+                .map(req -> Product.create(req.name(), req.brandId(), req.price()))
+                .toList()
+        );
+        Map<ProductCreateRequest, Product> requestProductMap = new HashMap<>();
+        for (int i = 0; i < requests.size(); i++) {
+            requestProductMap.put(requests.get(i), products.get(i));
+        }
+
+        productMetricsService.saveAll(
+                requestProductMap.entrySet().stream()
+                        .map(entry -> ProductMetrics.create(entry.getValue().getId(), entry.getKey().likeCount()))
+                        .toList()
+        );
+        supplyService.saveAll(
+                requestProductMap.entrySet().stream()
+                        .map(entry -> Supply.create(entry.getValue().getId(), entry.getKey().stock()))
+                        .toList()
+        );
+
+        return requestProductMap.entrySet().stream()
+                .map(entry -> {
+                    ProductCreateRequest req = entry.getKey();
+                    Product product = entry.getValue();
+                    Brand brand = brandMap.get(product.getBrandId());
+                    return new ProductInfo(
+                            product.getId(),
+                            product.getName(),
+                            brand.getName(),
+                            product.getPrice().amount(),
+                            req.likeCount(),
+                            req.stock().quantity()
+                    );
+                })
+                .toList();
+    }
+
     @Transactional(readOnly = true)
-    public Page<ProductInfo> getProductList(Pageable pageable) {
+    public Page<ProductInfo> getProductList(ProductSearchRequest request) {
+        Pageable pageable = request.pageable();
         String sortStr = pageable.getSort().toString().split(":")[0];
         if (StringUtils.equals(sortStr, "like_desc")) {
             int page = pageable.getPageNumber();
             int size = pageable.getPageSize();
-            Sort  sort = Sort.by(Sort.Direction.DESC, "likeCount");
+            Sort sort = Sort.by(Sort.Direction.DESC, "likeCount");
             return getProductsByLikeCount(PageRequest.of(page, size, sort));
         }
 

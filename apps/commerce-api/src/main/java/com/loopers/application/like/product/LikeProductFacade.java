@@ -42,6 +42,7 @@ public class LikeProductFacade {
             throw new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다.");
         }
         likeProductService.likeProduct(user.getId(), productId);
+        productMetricsService.incrementLikeCount(productId);
     }
 
     @Transactional
@@ -51,6 +52,7 @@ public class LikeProductFacade {
             throw new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다.");
         }
         likeProductService.unlikeProduct(user.getId(), productId);
+        productMetricsService.decrementLikeCount(productId);
     }
 
     public Page<LikeProductInfo> getLikedProducts(String userId, Pageable pageable) {

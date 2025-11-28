@@ -12,6 +12,12 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "tb_supply")
+@Table(
+    name = "tb_supply",
+    indexes = {
+        @Index(name = "idx_supply_product_id", columnList = "product_id")
+    }
+)
 @Getter
 public class Supply extends BaseEntity {
     private Long productId;
