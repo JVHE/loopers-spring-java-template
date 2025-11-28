@@ -177,38 +177,6 @@ public class OrderTest {
             assertThat(exception.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
         }
 
-        @DisplayName("할인 금액이 원가를 초과하는 경우, 예외가 발생한다. (Exception)")
-        @Test
-        void should_throwException_when_discountAmountExceedsOriginalPrice() {
-            // arrange
-            Long userId = 1L;
-            List<OrderItem> orderItems = List.of(
-                    OrderItem.create(1L, "상품1", 1, new Price(10000))
-            );
-            // 원가: 10000원, 할인: 5000원, 최종: 5000원 (정상 케이스)
-            // 하지만 Order 생성자에서 couponId가 있고 discountAmount > originalPrice인 경우를 테스트하기 위해
-            // DiscountResult는 정상적으로 생성하되, Order 생성자에서 검증하도록 함
-            // Note: DiscountResult 생성 시 originalPrice == discountAmount + finalPrice 검증이 있어서
-            // 할인 금액이 원가를 초과하는 DiscountResult는 생성할 수 없음
-            // 따라서 Order 생성자 내부 검증 로직은 실제로는 DiscountResult 검증 후에 실행되므로
-            // 이 테스트는 Order 생성자의 방어적 검증을 확인하는 용도
-            DiscountResult discountResult = new DiscountResult(
-                    1L, // couponId
-                    new Price(10000), // originalPrice
-                    new Price(5000), // discountAmount
-                    new Price(5000) // finalPrice
-            );
-
-            // act - 정상 케이스이므로 예외가 발생하지 않아야 함
-            Order order = Order.create(userId, orderItems, discountResult);
-
-            // assert
-            assertThat(order).isNotNull();
-            assertThat(order.getCouponId()).isEqualTo(1L);
-            assertThat(order.getDiscountAmount().amount()).isEqualTo(5000);
-            assertThat(order.getOriginalPrice().amount()).isEqualTo(10000);
-        }
-
         @DisplayName("쿠폰 없이 DiscountResult를 사용하여 주문을 생성할 수 있다. (Happy Path)")
         @Test
         void should_createOrder_when_discountResultWithoutCoupon() {

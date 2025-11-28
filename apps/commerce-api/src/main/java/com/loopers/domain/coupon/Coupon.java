@@ -10,7 +10,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import org.springframework.transaction.annotation.Transactional;
 
 @Entity
 @Table(name = "tb_coupon")
@@ -58,7 +57,6 @@ public class Coupon extends BaseEntity {
         return coupon;
     }
 
-    @Transactional
     public DiscountResult applyDiscount(Price originalPrice) {
         if (this.used) {
             throw new CoreException(ErrorType.BAD_REQUEST, "이미 사용된 쿠폰입니다.");
@@ -72,8 +70,8 @@ public class Coupon extends BaseEntity {
                 finalPrice = originalPrice.deduct(discountAmount);
             }
             case PERCENTAGE -> {
-                int calculatedDiscount = (originalPrice.amount() * discountValue) / 100;
-                discountAmount = new Price(calculatedDiscount);
+                long calculatedDiscount = ((long) originalPrice.amount() * discountValue) / 100;
+                discountAmount = new Price((int) calculatedDiscount);
                 finalPrice = originalPrice.deduct(discountAmount);
             }
             default -> throw new CoreException(ErrorType.BAD_REQUEST, "알 수 없는 쿠폰 타입입니다.");

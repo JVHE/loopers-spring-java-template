@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @DisplayName("주문 Facade(OrderFacade) 통합 테스트")
 public class OrderFacadeIntegrationTest {
     @Autowired
-    private PlatformTransactionManager transactionManager;  // 추가: TransactionTemplate俑
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private OrderFacade orderFacade;
