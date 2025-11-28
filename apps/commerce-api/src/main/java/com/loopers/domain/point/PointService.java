@@ -32,4 +32,13 @@ public class PointService {
     public Optional<Long> getCurrentPoint(Long userId) {
         return pointRepository.findByUserId(userId).map(Point::getAmount);
     }
+
+    @Transactional
+    public void checkAndDeductPoint(Long userId, Integer totalAmount) {
+        Point point = pointRepository.findByUserId(userId).orElseThrow(
+                () -> new CoreException(ErrorType.NOT_FOUND, "포인트 정보를 찾을 수 없습니다.")
+        );
+        point.deduct(totalAmount);
+        pointRepository.save(point);
+    }
 }

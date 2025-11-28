@@ -39,35 +39,33 @@ public class PointV1ApiE2ETest {
         databaseCleanUp.truncateAllTables();
     }
 
+    private final String validUserId = "user123";
+    private final String validEmail = "xx@yy.zz";
+    private final String validBirthday = "1993-03-13";
+    private final String validGender = "male";
+
+    @BeforeEach
+    void setupUser() {
+        UserV1Dto.UserRegisterRequest request = new UserV1Dto.UserRegisterRequest(
+                validUserId,
+                validEmail,
+                validBirthday,
+                validGender
+        );
+        ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
+        };
+        testRestTemplate.exchange(ENDPOINT_USER, HttpMethod.POST, new HttpEntity<>(request), responseType);
+    }
+
     @DisplayName("GET /api/v1/points")
     @Nested
     class GetPoints {
-        private final String validUserId = "user123";
-        private final String validEmail = "xx@yy.zz";
-        private final String validBirthday = "1993-03-13";
-        private final String validGender = "male";
-
-        // 회원가입 정보 작성
-        @BeforeEach
-        void setupUser() {
-            UserV1Dto.UserRegisterRequest request = new UserV1Dto.UserRegisterRequest(
-                    validUserId,
-                    validEmail,
-                    validBirthday,
-                    validGender
-            );
-            ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
-            };
-            testRestTemplate.exchange(ENDPOINT_USER, HttpMethod.POST, new HttpEntity<>(request), responseType);
-        }
-
-        @DisplayName("포인트 조회에 성공할 경우, 보유 포인트를 응답으로 반환한다.")
+        @DisplayName("로그인한 유저가 포인트 조회에 성공할 경우, 보유 포인트를 응답으로 반환한다.")
         @Test
         void returnUserPoints_whenGetUserPointsSuccess() {
-            // arrange: setupUser() 참조
-            String xUserIdHeader = "user123";
+            // arrange
             HttpHeaders headers = new HttpHeaders();
-            headers.add("X-USER-ID", xUserIdHeader);
+            headers.add("X-USER-ID", validUserId);
 
             // act
             ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
@@ -82,11 +80,10 @@ public class PointV1ApiE2ETest {
             );
         }
 
-        //`X-USER-ID` 헤더가 없을 경우, `400 Bad Request` 응답을 반환한다.
-        @DisplayName("`X-USER-ID` 헤더가 없을 경우, `400 Bad Request` 응답을 반환한다.")
+        @DisplayName("비로그인 유저가 포인트 조회를 시도할 경우, `400 Bad Request` 응답을 반환한다.")
         @Test
         void returnBadRequest_whenXUserIdHeaderIsMissing() {
-            // arrange: setupUser() 참조
+            // arrange
 
             // act
             ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
@@ -98,20 +95,75 @@ public class PointV1ApiE2ETest {
             assertThat(response.getStatusCode().value()).isEqualTo(400);
         }
 
-        @DisplayName("존재하는 유저가 1000원을 충전할 경우, 충전된 보유 총량을 응답으로 반환한다.")
+        @DisplayName("X-USER-ID 헤더가 빈 문자열일 경우, `400 Bad Request` 응답을 반환한다.")
+        @Test
+        void returnBadRequest_whenXUserIdHeaderIsEmpty() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", "");
+
+            // act
+            ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT, HttpMethod.GET, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("X-USER-ID 헤더가 공백만 있을 경우, `400 Bad Request` 응답을 반환한다.")
+        @Test
+        void returnBadRequest_whenXUserIdHeaderIsBlank() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", "   ");
+
+            // act
+            ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT, HttpMethod.GET, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("존재하지 않는 유저 ID로 조회할 경우, `404 Not Found` 응답을 반환한다.")
+        @Test
+        void returnNotFound_whenUserIdDoesNotExist() {
+            // arrange
+            String invalidUserId = "nonexist";
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", invalidUserId);
+
+            // act
+            ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT, HttpMethod.GET, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(404);
+        }
+    }
+
+    @DisplayName("POST /api/v1/points/charge")
+    @Nested
+    class ChargePoints {
+        @DisplayName("로그인한 유저가 포인트 충전에 성공할 경우, 충전된 보유 총량을 응답으로 반환한다.")
         @Test
         void returnChargedPoints_whenChargeUserPointsSuccess() {
-            // arrange: setupUser() 참조
-            String xUserIdHeader = "user123";
+            // arrange
             HttpHeaders headers = new HttpHeaders();
-            headers.add("X-USER-ID", xUserIdHeader);
+            headers.add("X-USER-ID", validUserId);
             PointV1Dto.PointChargeRequest request = new PointV1Dto.PointChargeRequest(1000);
 
             // act
             ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
             };
             HttpEntity<PointV1Dto.PointChargeRequest> requestEntity = new HttpEntity<>(request, headers);
-            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT, HttpMethod.POST, requestEntity, responseType);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT + "/charge", HttpMethod.POST, requestEntity, responseType);
 
             // assert
             assertAll(
@@ -120,25 +172,75 @@ public class PointV1ApiE2ETest {
             );
         }
 
-        //존재하지 않는 유저로 요청할 경우, `404 Not Found` 응답을 반환한다.
-        @DisplayName("존재하지 않는 유저로 요청할 경우, `404 Not Found` 응답을 반환한다.")
+        @DisplayName("비로그인 유저가 포인트 충전을 시도할 경우, `400 Bad Request` 응답을 반환한다.")
         @Test
-        void returnNotFound_whenChargePointsForNonExistentUser() {
-            // arrange: setupUser() 참조
-            String xUserIdHeader = "nonexist";
+        void returnBadRequest_whenXUserIdHeaderIsMissing() {
+            // arrange
+            PointV1Dto.PointChargeRequest request = new PointV1Dto.PointChargeRequest(1000);
+
+            // act
+            ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<PointV1Dto.PointChargeRequest> requestEntity = new HttpEntity<>(request, null);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT + "/charge", HttpMethod.POST, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("X-USER-ID 헤더가 빈 문자열일 경우, `400 Bad Request` 응답을 반환한다.")
+        @Test
+        void returnBadRequest_whenXUserIdHeaderIsEmpty() {
+            // arrange
             HttpHeaders headers = new HttpHeaders();
-            headers.add("X-USER-ID", xUserIdHeader);
+            headers.add("X-USER-ID", "");
             PointV1Dto.PointChargeRequest request = new PointV1Dto.PointChargeRequest(1000);
 
             // act
             ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
             };
             HttpEntity<PointV1Dto.PointChargeRequest> requestEntity = new HttpEntity<>(request, headers);
-            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT, HttpMethod.POST, requestEntity, responseType);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT + "/charge", HttpMethod.POST, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("X-USER-ID 헤더가 공백만 있을 경우, `400 Bad Request` 응답을 반환한다.")
+        @Test
+        void returnBadRequest_whenXUserIdHeaderIsBlank() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", "   ");
+            PointV1Dto.PointChargeRequest request = new PointV1Dto.PointChargeRequest(1000);
+
+            // act
+            ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<PointV1Dto.PointChargeRequest> requestEntity = new HttpEntity<>(request, headers);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT + "/charge", HttpMethod.POST, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("존재하지 않는 유저로 요청할 경우, `404 Not Found` 응답을 반환한다.")
+        @Test
+        void returnNotFound_whenChargePointsForNonExistentUser() {
+            // arrange
+            String invalidUserId = "nonexist";
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", invalidUserId);
+            PointV1Dto.PointChargeRequest request = new PointV1Dto.PointChargeRequest(1000);
+
+            // act
+            ParameterizedTypeReference<ApiResponse<PointV1Dto.PointResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<PointV1Dto.PointChargeRequest> requestEntity = new HttpEntity<>(request, headers);
+            ResponseEntity<ApiResponse<PointV1Dto.PointResponse>> response = testRestTemplate.exchange(ENDPOINT_POINT + "/charge", HttpMethod.POST, requestEntity, responseType);
 
             // assert
             assertThat(response.getStatusCode().value()).isEqualTo(404);
         }
     }
-
 }

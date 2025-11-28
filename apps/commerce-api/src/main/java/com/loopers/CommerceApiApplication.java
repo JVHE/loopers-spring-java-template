@@ -10,7 +10,6 @@ import java.util.TimeZone;
 
 @ConfigurationPropertiesScan
 @SpringBootApplication
-@EnableJpaRepositories(basePackages = "com.loopers.domain")
 public class CommerceApiApplication {
 
     @PostConstruct

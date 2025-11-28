@@ -26,7 +26,7 @@ public class PointV1Controller implements PointV1ApiSpec {
         return ApiResponse.success(response);
     }
 
-    @RequestMapping(method = RequestMethod.POST)
+    @RequestMapping(method = RequestMethod.POST, path = "/charge")
     @Override
     public ApiResponse<PointV1Dto.PointResponse> chargeUserPoints(
             @RequestHeader(value = "X-USER-ID", required = false) String userId,

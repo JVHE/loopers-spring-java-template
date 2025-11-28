@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 
@@ -66,7 +67,6 @@ public class UserV1ApiE2ETest {
             );
         }
 
-        // 회원 가입 시에 성별이 없을 경우, `400 Bad Request` 응답을 반환한다.
         @DisplayName("회원 가입 시에 성별이 없을 경우, `400 Bad Request` 응답을 반환한다.")
         @Test
         void returnBadRequest_whenGenderIsMissing() {
@@ -86,10 +86,9 @@ public class UserV1ApiE2ETest {
             // assert
             assertThat(response.getStatusCode().value()).isEqualTo(400);
         }
-
     }
 
-    @DisplayName("GET /api/v1/users/{userId}")
+    @DisplayName("GET /api/v1/users/me")
     @Nested
     class Get {
         private final String validUserId = "user123";
@@ -97,7 +96,6 @@ public class UserV1ApiE2ETest {
         private final String validBirthday = "1993-03-13";
         private final String validGender = "male";
 
-        // 회원가입 정보 작성
         @BeforeEach
         void setupUser() {
             UserV1Dto.UserRegisterRequest request = new UserV1Dto.UserRegisterRequest(
@@ -111,14 +109,18 @@ public class UserV1ApiE2ETest {
             testRestTemplate.exchange(ENDPOINT_USER, HttpMethod.POST, new HttpEntity<>(request), responseType);
         }
 
-        @DisplayName("내 정보 조회에 성공할 경우, 해당하는 유저 정보를 응답으로 반환한다.")
+        @DisplayName("로그인한 유저가 내 정보 조회에 성공할 경우, 해당하는 유저 정보를 응답으로 반환한다.")
         @Test
         void returnUserInfo_whenGetUserInfoSuccess() {
-            // arrange: setupUser() 참조
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", validUserId);
+
             // act
             ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
             };
-            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/" + validUserId, HttpMethod.GET, null, responseType);
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/me", HttpMethod.GET, requestEntity, responseType);
 
             // assert
             assertAll(
@@ -130,16 +132,68 @@ public class UserV1ApiE2ETest {
             );
         }
 
-        @DisplayName("존재하지 않는 ID 로 조회할 경우, `404 Not Found` 응답을 반환한다.")
+        @DisplayName("비로그인 유저가 내 정보 조회를 시도할 경우, `400 Bad Request` 응답을 반환한다.")
         @Test
-        void returnNotFound_whenUserIdDoesNotExist() {
+        void returnBadRequest_whenXUserIdHeaderIsMissing() {
             // arrange
-            String invalidUserId = "nonexist";
 
             // act
             ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
             };
-            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/" + invalidUserId, HttpMethod.GET, null, responseType);
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, null);
+            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/me", HttpMethod.GET, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("X-USER-ID 헤더가 빈 문자열일 경우, `400 Bad Request` 응답을 반환한다.")
+        @Test
+        void returnBadRequest_whenXUserIdHeaderIsEmpty() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", "");
+
+            // act
+            ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/me", HttpMethod.GET, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("X-USER-ID 헤더가 공백만 있을 경우, `400 Bad Request` 응답을 반환한다.")
+        @Test
+        void returnBadRequest_whenXUserIdHeaderIsBlank() {
+            // arrange
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", "   ");
+
+            // act
+            ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/me", HttpMethod.GET, requestEntity, responseType);
+
+            // assert
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+        }
+
+        @DisplayName("존재하지 않는 ID로 조회할 경우, `404 Not Found` 응답을 반환한다.")
+        @Test
+        void returnNotFound_whenUserIdDoesNotExist() {
+            // arrange
+            String invalidUserId = "nonexist";
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-USER-ID", invalidUserId);
+
+            // act
+            ParameterizedTypeReference<ApiResponse<UserV1Dto.UserResponse>> responseType = new ParameterizedTypeReference<>() {
+            };
+            HttpEntity<Void> requestEntity = new HttpEntity<>(null, headers);
+            ResponseEntity<ApiResponse<UserV1Dto.UserResponse>> response = testRestTemplate.exchange(ENDPOINT_USER + "/me", HttpMethod.GET, requestEntity, responseType);
 
             // assert
             assertThat(response.getStatusCode().value()).isEqualTo(404);

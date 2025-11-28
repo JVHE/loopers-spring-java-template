@@ -28,11 +28,21 @@ public class Point extends BaseEntity {
         return new Point(userId, 0L);
     }
 
-    public void charge(int amount) {
-        if (amount <= 0) {
+    public void charge(int otherAmount) {
+        if (otherAmount <= 0) {
             throw new CoreException(ErrorType.BAD_REQUEST, "충전 포인트는 0보다 커야 합니다.");
         }
 
-        this.amount += amount;
+        this.amount += otherAmount;
+    }
+
+    public void deduct(int otherAmount) {
+        if (otherAmount <= 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "차감할 포인트는 0보다 커야 합니다.");
+        }
+        if (this.amount < otherAmount) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "포인트가 부족합니다.");
+        }
+        this.amount -= otherAmount;
     }
 }
