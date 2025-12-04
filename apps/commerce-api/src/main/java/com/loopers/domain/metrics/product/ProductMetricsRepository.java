@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ProductMetricsRepository {
     Optional<ProductMetrics> findByProductId(Long productId);
 
+    Optional<ProductMetrics> findByProductIdForUpdate(Long productId);
+
     Collection<ProductMetrics> findByProductIds(Collection<Long> productIds);
 
     Page<ProductMetrics> findAll(Pageable pageable);

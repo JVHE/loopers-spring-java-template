@@ -4,6 +4,7 @@ import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandService;
 import com.loopers.domain.like.product.LikeProduct;
 import com.loopers.domain.like.product.LikeProductService;
+import com.loopers.domain.like.product.LikeResult;
 import com.loopers.domain.metrics.product.ProductMetrics;
 import com.loopers.domain.metrics.product.ProductMetricsService;
 import com.loopers.domain.product.Product;
@@ -41,8 +42,10 @@ public class LikeProductFacade {
         if (!productService.existsById(productId)) {
             throw new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다.");
         }
-        likeProductService.likeProduct(user.getId(), productId);
-        productMetricsService.incrementLikeCount(productId);
+        LikeResult likeResult = likeProductService.likeProduct(user.getId(), productId);
+        if (!likeResult.beforeLiked()) {
+            productMetricsService.incrementLikeCount(productId);
+        }
     }
 
     @Transactional
@@ -51,8 +54,10 @@ public class LikeProductFacade {
         if (!productService.existsById(productId)) {
             throw new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다.");
         }
-        likeProductService.unlikeProduct(user.getId(), productId);
-        productMetricsService.decrementLikeCount(productId);
+        LikeResult likeResult = likeProductService.unlikeProduct(user.getId(), productId);
+        if (likeResult.beforeLiked()) {
+            productMetricsService.decrementLikeCount(productId);
+        }
     }
 
     public Page<LikeProductInfo> getLikedProducts(String userId, Pageable pageable) {

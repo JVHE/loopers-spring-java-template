@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 public class ProductMetricsService {
     private final ProductMetricsRepository productMetricsRepository;
 
+    @Transactional(readOnly = true)
     public ProductMetrics getMetricsByProductId(Long productId) {
         return productMetricsRepository.findByProductId(productId)
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "해당 상품의 메트릭 정보를 찾을 수 없습니다."));
@@ -45,15 +46,26 @@ public class ProductMetricsService {
 
     @Transactional
     public void incrementLikeCount(Long productId) {
-        ProductMetrics productMetrics = getMetricsByProductId(productId);
-        productMetrics.incrementLikeCount();
-        productMetricsRepository.save(productMetrics);
+        productMetricsRepository.findByProductIdForUpdate(productId)
+                .ifPresentOrElse(productMetrics -> {
+                            productMetrics.incrementLikeCount();
+                            productMetricsRepository.save(productMetrics);
+                        },
+                        () -> {
+                            throw new CoreException(ErrorType.NOT_FOUND, "해당 상품의 메트릭 정보를 찾을 수 없습니다.");
+                        });
     }
 
+    @Transactional
     public void decrementLikeCount(Long productId) {
-        ProductMetrics productMetrics = getMetricsByProductId(productId);
-        productMetrics.decrementLikeCount();
-        productMetricsRepository.save(productMetrics);
+        productMetricsRepository.findByProductIdForUpdate(productId)
+                .ifPresentOrElse(productMetrics -> {
+                            productMetrics.decrementLikeCount();
+                            productMetricsRepository.save(productMetrics);
+                        },
+                        () -> {
+                            throw new CoreException(ErrorType.NOT_FOUND, "해당 상품의 메트릭 정보를 찾을 수 없습니다.");
+                        });
     }
 
     public List<ProductMetrics> saveAll(Collection<ProductMetrics> list) {

@@ -4,16 +4,16 @@ import com.loopers.domain.BaseEntity;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Getter;
 
 @Entity
-@Table(name = "tb_product_metrics")
 @Table(
-    name = "tb_product_metrics",
-    indexes = {
-        @Index(name = "idx_product_metrics_like_count", columnList = "like_count")
-    }
+        name = "tb_product_metrics",
+        indexes = {
+                @Index(name = "idx_product_metrics_like_count", columnList = "like_count")
+        }
 )
 @Getter
 public class ProductMetrics extends BaseEntity {
@@ -35,5 +35,16 @@ public class ProductMetrics extends BaseEntity {
         metrics.productId = productId;
         metrics.likeCount = likeCount;
         return metrics;
+    }
+
+    public void incrementLikeCount() {
+        this.likeCount += 1;
+    }
+
+    public void decrementLikeCount() {
+        if (this.likeCount <= 0) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "좋아요 수는 0 미만으로 내려갈 수 없습니다.");
+        }
+        this.likeCount -= 1;
     }
 }
