@@ -29,6 +29,60 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+# PG Simulator 설정
+pg:
+  simulator:
+    base-url: http://localhost:9090  # pg-simulator 기본 URL
+    timeout:
+      connect: 1000      # 연결 타임아웃 (ms)
+      read: 3000         # 읽기 타임아웃 (ms)
+
+commerce:
+  api:
+    base-url: http://localhost:8080
+    callback:
+      base-path: /api/v1/payments/callback
+
+# Resilience4j 설정
+resilience4j:
+  circuitbreaker:
+    instances:
+      pgCircuit:
+        sliding-window-size: 10
+        failure-rate-threshold: 50       # 실패율 50% 넘으면 Open
+        wait-duration-in-open-state: 10s # Open 상태 유지 시간
+        permitted-number-of-calls-in-half-open-state: 2
+        slow-call-duration-threshold: 2s  # 2초 이상이면 느린 호출로 간주
+        slow-call-rate-threshold: 50      # 느린 호출 비율 50% 넘으면 Open
+        record-exceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - feign.RetryableException
+          - org.springframework.web.client.ResourceAccessException
+
+  retry:
+    instances:
+      pgRetry:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - feign.RetryableException
+          - java.net.SocketTimeoutException
+        fail-after-max-attempts: true
+
+  timelimiter:
+    instances:
+      pgTimeout:
+        timeout-duration: 3s
+
+# FeignClient 설정 (선택)
+feign:
+  client:
+    config:
+      default:
+        connect-timeout: 1000
+        read-timeout: 3000
+        logger-level: basic
 ---
 spring:
   config:

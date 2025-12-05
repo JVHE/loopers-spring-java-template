@@ -29,6 +29,16 @@ public class Order extends BaseEntity {
     @Convert(converter = Price.Converter.class)
     private Price finalPrice;
 
+    private String pgPaymentId; // 외부 결제 시스템에서 발급한 결제 ID
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status;
+    @Enumerated(EnumType.STRING)
+    private PaymentFailureReason paymentFailureReason; // 결제 실패 사유
+    private String cardType;  // SAMSUNG, etc.
+    private String cardNo;  // 마스킹된 카드 번호
+    private String callbackUrl; // 결제 완료 후 호출할 콜백 URL
+
+
     protected Order() {
     }
 
@@ -71,5 +81,28 @@ public class Order extends BaseEntity {
         }
         Price originalPrice = new Price(orderItems.stream().mapToInt(OrderItem::getTotalPrice).sum());
         return create(userId, orderItems, new DiscountResult(originalPrice));
+    }
+
+    public void setPaymentInfo(String cardType, String cardNo, String callbackUrl) {
+        this.cardType = cardType;
+        this.cardNo = cardNo;
+        this.callbackUrl = callbackUrl;
+        this.status = OrderStatus.PENDING;
+    }
+
+    public void updateOrderStatus(OrderStatus newStatus, String pgPaymentId) {
+        if (newStatus == OrderStatus.PAID && this.status == OrderStatus.PAID) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 결제된 주문입니다.");
+        }
+        this.status = newStatus;
+        this.pgPaymentId = pgPaymentId;
+    }
+
+    public void markAsPaymentFailed(PaymentFailureReason reason) {
+        if (this.status == OrderStatus.PAID) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 결제된 주문입니다.");
+        }
+        this.status = OrderStatus.PENDING;
+        this.paymentFailureReason = reason;
     }
 }

@@ -9,10 +9,15 @@ import java.util.stream.Collectors;
 
 public record OrderRequest(
         List<OrderItemRequest> items,
-        Long couponId
+        Long couponId,
+        PaymentRequest paymentRequest
 ) {
     public OrderRequest(List<OrderItemRequest> items) {
-        this(items, null);
+        this(items, null, null);
+    }
+
+    public OrderRequest(List<OrderItemRequest> items, Long couponId) {
+        this(items, couponId, null);
     }
 
     public Map<Long, Integer> toItemQuantityMap() {

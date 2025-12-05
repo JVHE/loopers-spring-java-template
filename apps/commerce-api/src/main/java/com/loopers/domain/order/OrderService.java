@@ -10,10 +10,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Component
@@ -47,5 +50,31 @@ public class OrderService {
         int size = pageable.getPageSize();
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         return orderRepository.findByUserIdAndDeletedAtIsNull(userId, PageRequest.of(page, size, sort));
+    }
+
+    @Transactional
+    public Order updateOrderStatus(Long orderId, OrderStatus newStatus, String paymentId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
+        order.updateOrderStatus(newStatus, paymentId);
+        return orderRepository.save(order);
+    }
+
+    @Transactional
+    public Order markPaymentFailed(Long orderId, PaymentFailureReason reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
+        order.markAsPaymentFailed(reason);
+        return orderRepository.save(order);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Order> findByPaymentId(String paymentId) {
+        return orderRepository.findByPaymentId(paymentId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Order> findByStatusAndCreatedAtBefore(ZonedDateTime before) {
+        return orderRepository.findPendingPaymentOrdersBefore(before);
     }
 }
