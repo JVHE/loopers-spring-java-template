@@ -14,7 +14,7 @@ public interface ProductMetricsRepository {
 
     Collection<ProductMetrics> findByProductIds(Collection<Long> productIds);
 
-    Page<ProductMetrics> findAll(Pageable pageable);
+    Page<ProductMetrics> findAll(List<Long> brandIds, Pageable pageable);
 
     ProductMetrics save(ProductMetrics productMetrics);
 

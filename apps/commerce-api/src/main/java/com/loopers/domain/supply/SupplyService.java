@@ -39,6 +39,7 @@ public class SupplyService {
         return supplyRepository.save(supply);
     }
 
+    @Transactional
     public List<Supply> saveAll(List<Supply> list) {
         return supplyRepository.saveAll(list);
     }

@@ -28,12 +28,15 @@ public class ProductMetricsRepositoryImpl implements ProductMetricsRepository {
 
     @Override
     public Collection<ProductMetrics> findByProductIds(Collection<Long> productIds) {
-        return jpaRepository.findAllById(productIds);
+        return jpaRepository.findAllByProductIdIn(productIds);
     }
 
     @Override
-    public Page<ProductMetrics> findAll(Pageable pageable) {
-        return jpaRepository.findAll(pageable);
+    public Page<ProductMetrics> findAll(List<Long> brandIds, Pageable pageable) {
+        if (brandIds == null || brandIds.isEmpty()) {
+            return jpaRepository.findAll(pageable);
+        }
+        return jpaRepository.findAllByBrandIdIn(brandIds, pageable);
     }
 
     @Override

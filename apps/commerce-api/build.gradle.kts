@@ -1,7 +1,7 @@
 dependencies {
     // add-ons
     implementation(project(":modules:jpa"))
-//    implementation(project(":modules:redis"))
+    implementation(project(":modules:redis"))
     implementation(project(":supports:jackson"))
     implementation(project(":supports:logging"))
     implementation(project(":supports:monitoring"))
@@ -23,7 +23,7 @@ dependencies {
 
     // test-fixtures
     testImplementation(testFixtures(project(":modules:jpa")))
-//    testImplementation(testFixtures(project(":modules:redis")))
+    testImplementation(testFixtures(project(":modules:redis")))
     testImplementation("com.github.javafaker:javafaker:1.0.2") {
         exclude(group = "org.yaml", module = "snakeyaml")
     }

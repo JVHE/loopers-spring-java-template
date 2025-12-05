@@ -87,7 +87,7 @@ public class LikeProductFacadeIntegrationTest {
         productId = product.getId();
 
         // ProductMetrics 등록 (초기 좋아요 수: 0)
-        ProductMetrics metrics = ProductMetrics.create(productId, 0);
+        ProductMetrics metrics = ProductMetrics.create(productId, brandId, 0);
         productMetricsService.save(metrics);
 
         // Supply 등록
@@ -355,7 +355,7 @@ public class LikeProductFacadeIntegrationTest {
             product2 = productService.save(product2);
             Long productId2 = product2.getId();
 
-            ProductMetrics metrics2 = ProductMetrics.create(productId2, 0);
+            ProductMetrics metrics2 = ProductMetrics.create(productId2, brandId, 0);
             productMetricsService.save(metrics2);
 
             Supply supply2 = Supply.create(productId2, new Stock(50));
@@ -816,7 +816,7 @@ public class LikeProductFacadeIntegrationTest {
             product2 = productService.save(product2);
             Long productId2 = product2.getId();
 
-            ProductMetrics metrics2 = ProductMetrics.create(productId2, 0);
+            ProductMetrics metrics2 = ProductMetrics.create(productId2, brandId, 0);
             productMetricsService.save(metrics2);
 
             Supply supply2 = Supply.create(productId2, new Stock(50));

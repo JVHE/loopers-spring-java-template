@@ -39,11 +39,11 @@ public record ProductSearchRequest(
 
     private void validate() {
         Sort sort = pageable().getSort();
-        String sortStr = sort.toString().split(":")[0];
+        String sortStr = sort.toString();
         if (!(sort.isUnsorted()
-                || sortStr.equals("like_desc")
-                || sortStr.equals("price_asc")
-                || sortStr.equals("latest"))) {
+                || sortStr.equals("likeCount: DESC")
+                || sortStr.equals("price: ASC")
+                || sortStr.equals("createdAt: DESC"))) {
             throw new IllegalArgumentException("유효하지 않은 정렬 기준입니다.");
         }
     }
