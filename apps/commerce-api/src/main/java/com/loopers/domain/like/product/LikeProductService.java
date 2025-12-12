@@ -15,7 +15,6 @@ import java.util.Optional;
 @Service
 public class LikeProductService {
     private final LikeProductRepository likeProductRepository;
-    private final LikeProductEventPublisher eventPublisher;
 
     @Transactional
     public LikeResult likeProduct(Long userId, Long productId) {
@@ -27,12 +26,10 @@ public class LikeProductService {
         }
         if (likeProduct.isPresent()) {
             likeProduct.get().restore();
-            eventPublisher.publishLikeEvent(LikeProductEvent.create(EventType.UPDATED, productId, userId, true));
             return new LikeResult(true, false);
         }
         LikeProduct newLikeProduct = LikeProduct.create(userId, productId);
         likeProductRepository.save(newLikeProduct);
-        eventPublisher.publishLikeEvent(LikeProductEvent.create(EventType.CREATED, productId, userId, true));
         return new LikeResult(true, false);
     }
 
@@ -41,9 +38,6 @@ public class LikeProductService {
         Optional<LikeProduct> likeProduct = likeProductRepository.findByUserIdAndProductId(userId, productId);
         boolean beforeLiked = likeProduct.isPresent() && likeProduct.get().getDeletedAt() == null;
         likeProduct.ifPresent(BaseEntity::delete);
-        if (beforeLiked) {
-            eventPublisher.publishLikeEvent(LikeProductEvent.create(EventType.DELETED, productId, userId, false));
-        }
         return new LikeResult(false, beforeLiked);
     }
 

@@ -2,7 +2,10 @@ package com.loopers.application.like.product;
 
 import com.loopers.domain.brand.Brand;
 import com.loopers.domain.brand.BrandService;
+import com.loopers.domain.event.EventType;
 import com.loopers.domain.like.product.LikeProduct;
+import com.loopers.domain.like.product.LikeProductEvent;
+import com.loopers.domain.like.product.LikeProductEventPublisher;
 import com.loopers.domain.like.product.LikeProductService;
 import com.loopers.domain.like.product.LikeResult;
 import com.loopers.domain.metrics.product.ProductMetrics;
@@ -13,7 +16,6 @@ import com.loopers.domain.supply.Supply;
 import com.loopers.domain.supply.SupplyService;
 import com.loopers.domain.user.User;
 import com.loopers.domain.user.UserService;
-import com.loopers.infrastructure.cache.product.ProductCacheService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
@@ -31,12 +33,12 @@ import java.util.stream.Collectors;
 @Component
 public class LikeProductFacade {
     private final LikeProductService likeProductService;
+    private final LikeProductEventPublisher eventPublisher;
     private final UserService userService;
     private final ProductService productService;
     private final ProductMetricsService productMetricsService;
     private final BrandService brandService;
     private final SupplyService supplyService;
-//    private final ProductCacheService productCacheService;
 
     @Transactional
     public void likeProduct(String userId, Long productId) {
@@ -44,8 +46,11 @@ public class LikeProductFacade {
         Product product = productService.getProductById(productId)
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
         LikeResult likeResult = likeProductService.likeProduct(user.getId(), productId);
+        
         if (!likeResult.beforeLiked()) {
-            invalidateProductCache(product.getBrandId());
+            eventPublisher.publishLikeEvent(
+                    LikeProductEvent.create(EventType.CREATED, productId, user.getId(), product.getBrandId(), true)
+            );
         }
     }
 
@@ -55,18 +60,12 @@ public class LikeProductFacade {
         Product product = productService.getProductById(productId)
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
         LikeResult likeResult = likeProductService.unlikeProduct(user.getId(), productId);
+        
         if (likeResult.beforeLiked()) {
-            invalidateProductCache(product.getBrandId());
+            eventPublisher.publishLikeEvent(
+                    LikeProductEvent.create(EventType.DELETED, productId, user.getId(), product.getBrandId(), false)
+            );
         }
-    }
-
-    // todo: event handler에서 처리 필요
-    private void invalidateProductCache(Long brandId) {
-//        try {
-//            productCacheService.invalidateProductList(brandId);
-//        } catch (Exception e) {
-//            System.out.println("캐시 무효화 실패: " + e.getMessage());
-//        }
     }
 
     public Page<LikeProductInfo> getLikedProducts(String userId, Pageable pageable) {

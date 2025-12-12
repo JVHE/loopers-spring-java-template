@@ -8,7 +8,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 @Configuration
-@EnableAsync
+@EnableAsync(proxyTargetClass = true) // CGLIB 프록시 강제 (ProductCacheService 등 클래스 기반 빈 주입 시 타입 불일치 방지)
 public class AsyncEventConfig {
 
     @Bean(name = "eventTaskExecutor")
