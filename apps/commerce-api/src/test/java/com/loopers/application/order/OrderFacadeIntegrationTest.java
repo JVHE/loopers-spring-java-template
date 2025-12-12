@@ -380,7 +380,7 @@ public class OrderFacadeIntegrationTest {
 
         @DisplayName("정액 쿠폰을 적용한 주문이 성공적으로 생성되고, 재고/포인트/쿠폰이 정상적으로 차감된다. (Happy Path)")
         @Test
-        void should_createOrderWithFixedCoupon_when_validRequest() {
+        void should_createOrderWithFixedCoupon_when_validRequest() throws InterruptedException {
             // arrange
             // 초기 포인트: 100000원 (setup에서 설정)
             // 상품1: 10000원 * 2개 = 20000원
@@ -420,14 +420,15 @@ public class OrderFacadeIntegrationTest {
             Point point = pointJpaRepository.findByUserId(userEntityId).orElseThrow();
             assertThat(point.getAmount()).isEqualTo(65000); // 100000 - 35000
 
-            // assert - 쿠폰 사용 확인
+            // assert - 쿠폰 사용 확인 (이벤트 핸들러가 처리될 때까지 대기)
+            Thread.sleep(2000); // 이벤트 핸들러 처리 대기
             Coupon usedCoupon = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(usedCoupon.isUsed()).isTrue();
         }
 
         @DisplayName("정률 쿠폰을 적용한 주문이 성공적으로 생성되고, 재고/포인트/쿠폰이 정상적으로 차감된다. (Happy Path)")
         @Test
-        void should_createOrderWithPercentageCoupon_when_validRequest() {
+        void should_createOrderWithPercentageCoupon_when_validRequest() throws InterruptedException {
             // arrange
             // 초기 포인트: 100000원 (setup에서 설정)
             // 상품1: 10000원 * 2개 = 20000원
@@ -465,7 +466,8 @@ public class OrderFacadeIntegrationTest {
             Point point = pointJpaRepository.findByUserId(userEntityId).orElseThrow();
             assertThat(point.getAmount()).isEqualTo(68000); // 100000 - 32000
 
-            // assert - 쿠폰 사용 확인
+            // assert - 쿠폰 사용 확인 (이벤트 핸들러가 처리될 때까지 대기)
+            Thread.sleep(2000); // 이벤트 핸들러 처리 대기
             Coupon usedCoupon = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(usedCoupon.isUsed()).isTrue();
         }
@@ -957,7 +959,8 @@ public class OrderFacadeIntegrationTest {
             assertThat(successCount.get()).isEqualTo(1);
             assertThat(failureCount.get()).isEqualTo(4);
 
-            // assert - 쿠폰이 사용되었는지 확인
+            // assert - 쿠폰이 사용되었는지 확인 (이벤트 핸들러가 처리될 때까지 대기)
+            Thread.sleep(2000); // 이벤트 핸들러 처리 대기
             Coupon usedCoupon = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(usedCoupon.isUsed()).isTrue();
         }

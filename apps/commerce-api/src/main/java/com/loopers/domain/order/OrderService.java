@@ -1,6 +1,7 @@
 package com.loopers.domain.order;
 
 import com.loopers.domain.common.vo.DiscountResult;
+import com.loopers.domain.event.EventType;
 import com.loopers.domain.product.Product;
 import com.loopers.infrastructure.pg.PgV1Dto;
 import com.loopers.support.error.CoreException;
@@ -23,6 +24,7 @@ import java.util.Optional;
 @Component
 public class OrderService {
     private final OrderRepository orderRepository;
+    private final OrderEventPublisher eventPublisher;
 
     public Order save(Order order) {
         return orderRepository.save(order);
@@ -38,6 +40,16 @@ public class OrderService {
         )));
         Order order = Order.create(userId, orderItems, discountResult, paymentMethod);
 
+        eventPublisher.publishOrderCreated(
+                OrderEvent.createOrderCreatedEvent(
+                        order.getId(),
+                        order.getOrderId(),
+                        order.getUserId(),
+                        order.getCouponId(),
+                        order.getFinalPrice(),
+                        order.getPaymentMethod()
+                )
+        );
         return orderRepository.save(order);
     }
 
@@ -65,6 +77,7 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
         order.markPaidByPoint();
+        eventPublisher.publishOrderPaid(OrderEvent.createOrderPaidEvent(EventType.CREATED, order));
         orderRepository.save(order);
     }
 
@@ -74,6 +87,11 @@ public class OrderService {
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
         order.updateOrderStatus(pgResponse);
         orderRepository.save(order);
+        
+        // 결제 완료 이벤트 발행 (PAID 상태인 경우)
+        if (order.getStatus() == OrderStatus.PAID) {
+            eventPublisher.publishOrderPaid(OrderEvent.createOrderPaidEvent(EventType.UPDATED, order));
+        }
     }
 
     public Order getOrderByIdAndUserIdForUpdate(Long orderId, Long userId) {

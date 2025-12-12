@@ -36,7 +36,7 @@ public class LikeProductFacade {
     private final ProductMetricsService productMetricsService;
     private final BrandService brandService;
     private final SupplyService supplyService;
-    private final ProductCacheService productCacheService;
+//    private final ProductCacheService productCacheService;
 
     @Transactional
     public void likeProduct(String userId, Long productId) {
@@ -45,8 +45,7 @@ public class LikeProductFacade {
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
         LikeResult likeResult = likeProductService.likeProduct(user.getId(), productId);
         if (!likeResult.beforeLiked()) {
-            productMetricsService.incrementLikeCount(productId);
-            invalidateProductCache(productId, product.getBrandId());
+            invalidateProductCache(product.getBrandId());
         }
     }
 
@@ -57,18 +56,17 @@ public class LikeProductFacade {
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "상품을 찾을 수 없습니다."));
         LikeResult likeResult = likeProductService.unlikeProduct(user.getId(), productId);
         if (likeResult.beforeLiked()) {
-            productMetricsService.decrementLikeCount(productId);
-            invalidateProductCache(productId, product.getBrandId());
+            invalidateProductCache(product.getBrandId());
         }
     }
 
-    private void invalidateProductCache(Long productId, Long brandId) {
-        try {
-            productCacheService.invalidateProductDetail(productId);
-            productCacheService.invalidateProductList(brandId);
-        } catch (Exception e) {
-            System.out.println("캐시 무효화 실패: " + e.getMessage());
-        }
+    // todo: event handler에서 처리 필요
+    private void invalidateProductCache(Long brandId) {
+//        try {
+//            productCacheService.invalidateProductList(brandId);
+//        } catch (Exception e) {
+//            System.out.println("캐시 무효화 실패: " + e.getMessage());
+//        }
     }
 
     public Page<LikeProductInfo> getLikedProducts(String userId, Pageable pageable) {
