@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @RequiredArgsConstructor
 @Component
@@ -65,7 +66,13 @@ public class PaymentStatusRecoveryScheduler {
         log.info("트랜잭션 키 없는 주문 처리 시작 - orderId: {}", order.getOrderId());
 
         // 1. PG 시스템에 orderId로 조회 시도
-        PgV1Dto.PgOrderResponse response = pgPaymentExecutor.getPaymentByOrderIdAsync(order.getOrderId()).get();
+        PgV1Dto.PgOrderResponse response;
+        try {
+            response = pgPaymentExecutor.getPaymentByOrderIdAsync(order.getOrderId()).get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("PG 시스템 조회 실패 - orderId: {}", order.getOrderId(), e);
+            return;
+        }
 
         if (BooleanUtils.isNotTrue(response.isFallback()) && !response.transactions().isEmpty()) {
             // PG 시스템에 기록이 있는 경우 (부분 성공 케이스)
