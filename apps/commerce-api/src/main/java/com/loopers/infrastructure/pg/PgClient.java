@@ -1,8 +1,6 @@
 package com.loopers.infrastructure.pg;
 
-import com.loopers.infrastructure.pg.dto.PgPaymentRequest;
-import com.loopers.infrastructure.pg.dto.PgPaymentResponse;
-import com.loopers.infrastructure.pg.dto.PgPaymentStatusResponse;
+import com.loopers.interfaces.api.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,20 +8,11 @@ import org.springframework.web.bind.annotation.*;
 public interface PgClient {
 
     @PostMapping("/api/v1/payments")
-    PgPaymentResponse requestPayment(
-            @RequestHeader("X-USER-ID") String userId,
-            @RequestBody PgPaymentRequest request
-    );
+    ApiResponse<PgV1Dto.PgTransactionResponse> requestPayment(@RequestBody PgV1Dto.PgPaymentRequest request);
 
-    @GetMapping("/api/v1/payments/{paymentId}")
-    PgPaymentStatusResponse getPaymentStatus(
-            @RequestHeader("X-USER-ID") String userId,
-            @PathVariable String paymentId
-    );
+    @GetMapping("/api/v1/payments/{transactionKey}")
+    ApiResponse<PgV1Dto.PgTransactionDetailResponse> getTransactionDetail(@PathVariable String transactionKey);
 
-    @GetMapping("/api/v1/payments")
-    PgPaymentStatusResponse getPaymentByOrderId(
-            @RequestHeader("X-USER-ID") String userId,
-            @RequestParam("orderId") String orderId
-    );
+    @GetMapping(path = "/api/v1/payments", params = "orderId")
+    ApiResponse<PgV1Dto.PgOrderResponse> getPaymentByOrderId(@RequestParam("orderId") String orderId);
 }

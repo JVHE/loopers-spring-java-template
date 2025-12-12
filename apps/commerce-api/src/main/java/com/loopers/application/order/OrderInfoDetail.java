@@ -2,7 +2,7 @@ package com.loopers.application.order;
 
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderStatus;
-import com.loopers.domain.order.PaymentFailureReason;
+import com.loopers.domain.order.PaymentMethod;
 
 import java.util.List;
 
@@ -11,8 +11,9 @@ public record OrderInfoDetail(
         Long userId,
         Integer totalPrice,
         OrderStatus status,
+        PaymentMethod paymentMethod,
         String paymentId,
-        PaymentFailureReason failureReason,
+        String pgPaymentReason,
         List<OrderItemInfo> items
 ) {
     public static OrderInfoDetail from(Order order) {
@@ -21,8 +22,9 @@ public record OrderInfoDetail(
                 order.getUserId(),
                 order.getFinalPrice().amount(),
                 order.getStatus(),
-                order.getPgPaymentId(),
-                order.getPaymentFailureReason(),
+                order.getPaymentMethod(),
+                order.getPgTransactionKey(),
+                order.getPgPaymentReason(),
                 OrderItemInfo.fromList(order.getOrderItems())
         );
     }

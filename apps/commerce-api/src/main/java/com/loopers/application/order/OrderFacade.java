@@ -6,7 +6,7 @@ import com.loopers.domain.coupon.CouponService;
 import com.loopers.domain.order.Order;
 import com.loopers.domain.order.OrderService;
 import com.loopers.domain.order.OrderStatus;
-import com.loopers.domain.order.PaymentFailureReason;
+import com.loopers.domain.order.PaymentMethod;
 import com.loopers.domain.point.PointService;
 import com.loopers.domain.product.Product;
 import com.loopers.domain.product.ProductService;
@@ -14,17 +14,15 @@ import com.loopers.domain.supply.SupplyService;
 import com.loopers.domain.user.User;
 import com.loopers.domain.user.UserService;
 import com.loopers.infrastructure.payment.PaymentCallbackUrlGenerator;
-import com.loopers.infrastructure.pg.PgClient;
-import com.loopers.infrastructure.pg.dto.PgPaymentRequest;
-import com.loopers.infrastructure.pg.dto.PgPaymentResponse;
-import com.loopers.infrastructure.pg.dto.PgPaymentStatusResponse;
-import com.loopers.interfaces.api.payment.PaymentCallbackRequest;
+import com.loopers.infrastructure.pg.PgPaymentExecutor;
+import com.loopers.infrastructure.pg.PgV1Dto;
+import com.loopers.interfaces.api.payment.PaymentV1Dto;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -32,12 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Component
+@Slf4j
 public class OrderFacade {
     private final CouponService couponService;
     private final OrderService orderService;
@@ -46,7 +46,7 @@ public class OrderFacade {
     private final SupplyService supplyService;
     private final UserService userService;
 
-    private final PgClient pgClient;
+    private final PgPaymentExecutor pgPaymentExecutor;
     private final PaymentCallbackUrlGenerator callbackUrlGenerator;
 
     @Transactional(readOnly = true)
@@ -70,61 +70,68 @@ public class OrderFacade {
         request.validate();
 
         Map<Long, Integer> productIdQuantityMap = request.toItemQuantityMap();
-
         productIdQuantityMap.forEach(supplyService::checkAndDecreaseStock);
 
+        Map<Product, Integer> productQuantityMap = buildProductQuantityMap(productIdQuantityMap);
+        Price originalPrice = calculateOriginalPrice(productQuantityMap);
+        DiscountResult discountResult = getDiscountResult(request.couponId(), user, originalPrice);
+
+        Order order = orderService.createOrder(productQuantityMap, user.getId(), discountResult, request.paymentMethod());
+
+        if (request.paymentMethod() == PaymentMethod.POINT) {
+            return handlePointPayment(order.getId(), user.getId(), discountResult);
+        }
+        return handlePgPayment(order.getId(), order.getOrderId(), request, discountResult);
+    }
+
+    private Map<Product, Integer> buildProductQuantityMap(Map<Long, Integer> productIdQuantityMap) {
         List<Product> products = productService.getProductsByIds(productIdQuantityMap.keySet());
-        Map<Product, Integer> productQuantityMap = products.stream().collect(Collectors.toMap(
+        return products.stream().collect(Collectors.toMap(
                 Function.identity(),
                 product -> productIdQuantityMap.get(product.getId())
         ));
+    }
 
-        Price originalPrice = productQuantityMap.entrySet().stream()
+    private Price calculateOriginalPrice(Map<Product, Integer> productQuantityMap) {
+        return productQuantityMap.entrySet().stream()
                 .map(entry -> entry.getKey().getPrice().multiply(entry.getValue()))
                 .reduce(new Price(0), Price::add);
+    }
 
-        DiscountResult discountResult = getDiscountResult(request.couponId(), user, originalPrice);
+    private OrderInfo handlePointPayment(Long orderId, Long userId, DiscountResult discountResult) {
+        pointService.checkAndDeductPoint(userId, discountResult.finalPrice());
+        orderService.markPaidByPoint(orderId);
+        Order updated = orderService.getOrderById(orderId);
+        return OrderInfo.from(updated);
+    }
 
-        pointService.checkAndDeductPoint(user.getId(), discountResult.finalPrice());
-        Order order = orderService.createOrder(productQuantityMap, user.getId(), discountResult);
-        Long orderId = order.getId();
+    private OrderInfo handlePgPayment(Long orderPk, String orderPublicId, OrderRequest request, DiscountResult discountResult) {
+        String callbackUrl = callbackUrlGenerator.generateCallbackUrl(orderPublicId);
+        orderService.setPgPaymentInfo(orderPk, request.paymentRequest().cardType(), request.paymentRequest().cardNo(), callbackUrl);
 
-        // 결제 정보 설정
-        if (request.paymentRequest() != null) {
-            String callbackUrl = callbackUrlGenerator.generateCallbackUrl(orderId);
+        PgV1Dto.PgPaymentRequest pgRequest = new PgV1Dto.PgPaymentRequest(
+                orderPublicId,
+                request.paymentRequest().cardType(),
+                request.paymentRequest().cardNo(),
+                (long) discountResult.finalPrice().amount(),
+                callbackUrl
+        );
 
-            order.setPaymentInfo(
-                    request.paymentRequest().cardType(),
-                    request.paymentRequest().cardNo(),
-                    callbackUrl
-            );
-//            order = orderService.save(order);  // 결제 정보 저장
-            // 비동기로 PG 결제 요청
-            PgPaymentRequest pgRequest = new PgPaymentRequest(
-                    String.valueOf(orderId),
-                    request.paymentRequest().cardType(),
-                    request.paymentRequest().cardNo(),
-                    String.valueOf(discountResult.finalPrice().amount()),
-                    callbackUrl  // 서버에서 생성한 콜백 URL
-            );
+        sendPgPaymentAsync(orderPk, pgRequest);
+        Order updated = orderService.getOrderById(orderPk);
+        return OrderInfo.from(updated);
+    }
 
-            requestPaymentAsync(userId, pgRequest)
-                    .thenAccept(pgResponse -> {
-                        // 결제 요청 성공 시 paymentId 업데이트
-                        if (pgResponse.paymentId() != null) {
-                            orderService.updateOrderStatus(
-                                    orderId,
-                                    OrderStatus.PENDING,
-                                    pgResponse.paymentId()
-                            );
-                        }
-                    })
-                    .exceptionally(throwable -> {
-                        System.out.println("결제 요청 실패 - orderId: " + orderId + ", " + throwable.getMessage());
-                        return null;
-                    });
-        }
-        return OrderInfo.from(order);
+    private void sendPgPaymentAsync(Long orderPk, PgV1Dto.PgPaymentRequest pgRequest) {
+        pgPaymentExecutor.requestPaymentAsync(pgRequest)
+                .thenAccept(pgResponse -> {
+                    orderService.updateStatusByPgResponse(orderPk, pgResponse);
+                    log.info("결제 요청 성공 - orderId: {}, pgResponse: {}", orderPk, pgResponse);
+                })
+                .exceptionally(throwable -> {
+                    log.error("결제 요청 실패 - orderId: {}", orderPk, throwable);
+                    return null;
+                });
     }
 
     private DiscountResult getDiscountResult(Long couponId, User user, Price originalPrice) {
@@ -134,126 +141,94 @@ public class OrderFacade {
         return new DiscountResult(originalPrice);
     }
 
+    @Transactional
+    public void handlePgPaymentCallback(String orderId, PaymentV1Dto.PaymentCallbackRequest request) {
+        log.info("콜백 처리 시작 - orderId: {}, transactionKey: {}, status: {}", orderId, request.transactionKey(), request.status());
+        // 이미 완료된 주문인지 확인
+        Optional<Order> orderOptional = orderService.findByOrderId(orderId);
+        if (orderOptional.isEmpty()) {
+            log.warn("존재하지 않는 주문에 대한 콜백 - orderId: {}, request: {}", orderId, request);
+            return;
+        }
+        Order order = orderOptional.get();
+        if (order.getPaymentMethod() != PaymentMethod.PG) {
+            log.warn("PG 콜백이지만 포인트 결제 주문 - orderId: {}", orderId);
+            return;
+        }
+        if (order.getStatus() == OrderStatus.PAID) {
+            log.warn("이미 결제 완료된 주문 - orderId: {}, request: {}", orderId, request);
+            return;
+        }
+        PgV1Dto.PgTransactionResponse matchedTransaction = null;
+        // PG에 상태 재확인 (선택사항: 콜백 검증)
+        try {
+            log.info("PG 상태 확인 시도 - orderId: {}", orderId);
+            PgV1Dto.PgOrderResponse pgOrderResponse = pgPaymentExecutor.getPaymentByOrderIdAsync(orderId).get();
+            // fallback이 아닌 실제 응답인지 확인
+            if (BooleanUtils.isTrue(pgOrderResponse.isFallback())) {
+                log.warn("PG 상태 확인 결과가 fallback 응답 - orderId: {}", orderId);
+                return;
+            }
 
-    // 결제 요청
-    @CircuitBreaker(name = "pgCircuit", fallbackMethod = "requestPaymentFallback")
-    @Retry(name = "pgRetry", fallbackMethod = "requestPaymentFallback")
-    @TimeLimiter(name = "pgTimeout")
-    public CompletableFuture<PgPaymentResponse> requestPaymentAsync(String userId, PgPaymentRequest request) {
-        return CompletableFuture.supplyAsync(() -> pgClient.requestPayment(userId, request));
-    }
+            // 리스트에서 현재 받은 callback response의 transactionKey와 status가 일치하는지 확인
+            // 최신 순으로 응답하므로, 만약 현재 주문의 트랜잭션 키를 먼저 찾으면 지금 들어온 요청에 대한 처리는 하지 않는다
+            matchedTransaction = pgOrderResponse.transactions().stream()
+                    .filter(tx -> StringUtils.equalsIgnoreCase(tx.transactionKey(), request.transactionKey()))
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("PG 상태 확인 실패 - orderId: {}", orderId, e);
+            return;
+        }
 
-    // 결제 요청 실패
-    public CompletableFuture<PgPaymentResponse> requestPaymentFallback(String userId, PgPaymentRequest request, Throwable throwable) {
-        System.out.println("Payment request failed: " + throwable.getMessage());
+        // 일치하는 거래가 없으면 경고 로그 기록 후 PENDING 상태로 처리
+        if (matchedTransaction == null) {
+            log.warn("콜백 검증 실패 - 일치하는 거래 없음 - orderId: {}, transactionKey: {}", orderId, request.transactionKey());
+            return;
+        }
 
-        // fallback 응답 반환. 결제 대기 상태로 저장
-        PgPaymentResponse fallbackResponse = new PgPaymentResponse(
-                null,
-                "PENDING",
-                "결제 요청이 지연되고 있습니다. 잠시 후 상태를 확인해주세요."
-        );
-        return CompletableFuture.completedFuture(fallbackResponse);
-    }
+        log.info("PG 상태 확인 성공 - orderId: {}, matched status: {}", orderId, matchedTransaction.status());
 
-    // 결제 상태 확인
-    @CircuitBreaker(name = "pgCircuit", fallbackMethod = "getPaymentStatusFallback")
-    @Retry(name = "pgRetry", fallbackMethod = "getPaymentStatusFallback")
-    @TimeLimiter(name = "pgTimeout")
-    private CompletableFuture<PgPaymentStatusResponse> getPaymentStatusAsync(String userId, String paymentId) {
-        return CompletableFuture.supplyAsync(() -> pgClient.getPaymentStatus(userId, paymentId));
-    }
-
-    // 결제 상태 확인 실패
-    public CompletableFuture<PgPaymentStatusResponse> getPaymentStatusFallback(String userId, String paymentId, Throwable throwable) {
-        System.out.println("Payment status check failed: " + throwable.getMessage());
-
-        // fallback 응답 반환. 결제 상태를 알 수 없음
-        PgPaymentStatusResponse fallbackStatus = new PgPaymentStatusResponse(
-                paymentId,
-                "UNKNOWN",
-                "TIMEOUT",
-                "결제 상태 확인이 지연되고 있습니다. 잠시 후 다시 시도해주세요."
-        );
-        return CompletableFuture.completedFuture(fallbackStatus);
-    }
-
-    // 주문 ID로 결제 상태 확인
-    @CircuitBreaker(name = "pgCircuit", fallbackMethod = "getPaymentByOrderIdFallback")
-    @TimeLimiter(name = "pgTimeout")
-    public CompletableFuture<PgPaymentStatusResponse> getPaymentByOrderIdAsync(String userId, String orderId) {
-        return CompletableFuture.supplyAsync(() -> pgClient.getPaymentByOrderId(userId, orderId));
-    }
-
-    // 주문 ID로 결제 상태 확인 실패
-    public CompletableFuture<PgPaymentStatusResponse> getPaymentByOrderIdFallback(String userId, String orderId, Throwable throwable) {
-        System.out.println("Payment status by order ID check failed: " + throwable.getMessage());
-
-        // fallback 응답 반환. 결제 상태를 알 수 없음
-        PgPaymentStatusResponse fallbackStatus = new PgPaymentStatusResponse(
-                null,
-                "UNKNOWN",
-                "TIMEOUT",
-                "결제 상태 확인이 지연되고 있습니다. 잠시 후 다시 시도해주세요."
-        );
-        return CompletableFuture.completedFuture(fallbackStatus);
+        // 결제 상태 업데이트 후 저장
+        order.updateOrderStatus(matchedTransaction);
+        orderService.save(order);
     }
 
     @Transactional
-    public void handleCallback(Long orderId, PaymentCallbackRequest request) {
-        // PG에 상태 재확인
-        PgPaymentStatusResponse statusResponse = getPaymentByOrderIdAsync("SYSTEM", String.valueOf(orderId))
-                .exceptionally(throwable -> {
-                    System.out.println("PG 상태 재확인 실패 - orderId: " + orderId + ", " + throwable.getMessage());
-                    return null;
-                })
-                .join();
+    public OrderInfo payOrder(String userId, Long orderId, OrderRequest.PaymentRequest request) {
+        // 사용자 및 주문 조회
+        User user = userService.findByUserId(userId).orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        // 주문 검증
 
-        if (statusResponse != null) {
-            System.out.println("PG 상태 재확인 성공 - orderId: " + orderId + ", status: " + statusResponse.status());
-            // PG에서 받은 상태로 덮어쓰기
-            request = new PaymentCallbackRequest(
-                    statusResponse.paymentId(),
-                    statusResponse.status(),
-                    statusResponse.failureReason()
-            );
-        } else {
-            System.out.println("PG 상태 재확인 불가 - orderId: " + orderId + ", 기존 콜백 상태 사용");
+        Order order = orderService.getOrderByIdAndUserIdForUpdate(orderId, user.getId());
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "이미 결제 완료된 주문입니다.");
         }
-
-        // 결제 상태 업데이트
-        OrderStatus status = mapPgStatusToOrderStatus(request.status());
-        orderService.updateOrderStatus(orderId, status, request.paymentId());
-
-        // 결제 실패 시 실패 사유 저장
-        if (status == OrderStatus.FAILED) {
-            PaymentFailureReason reason = mapFailureReason(request.failureReason());
-            orderService.markPaymentFailed(orderId, reason);
+        if (order.getPaymentMethod() == PaymentMethod.POINT) {
+            throw new CoreException(ErrorType.BAD_REQUEST, "포인트 결제 주문은 PG 결제를 사용할 수 없습니다.");
         }
-    }
-
-    private OrderStatus mapPgStatusToOrderStatus(String pgStatus) {
-        return switch (pgStatus.toUpperCase()) {
-            case "SUCCESS" -> OrderStatus.PAID;
-            case "FAILED" -> OrderStatus.FAILED;
-            default -> OrderStatus.PENDING;
-        };
-    }
-
-    private PaymentFailureReason mapFailureReason(String reason) {
-        if (reason == null) {
-            return PaymentFailureReason.UNKNOWN;
+        // 결제 정보 설정
+        String callbackUrl = order.getCallbackUrl();
+        if (StringUtils.isBlank(callbackUrl)) {
+            callbackUrl = callbackUrlGenerator.generateCallbackUrl(order.getOrderId());
         }
-        return switch (reason.toUpperCase()) {
-            case "LIMITED_FUNDS" -> PaymentFailureReason.LIMITED_FUNDS;
-            case "INVALID_CARD" -> PaymentFailureReason.INVALID_CARD;
-            default -> PaymentFailureReason.UNKNOWN;
-        };
-    }
+        order.setPaymentInfo(
+                request.cardType(),
+                request.cardNo(),
+                callbackUrl
+        );
+        order = orderService.save(order);  // 결제 정보 저장
+        // 비동기로 PG 결제 요청
+        PgV1Dto.PgPaymentRequest pgRequest = new PgV1Dto.PgPaymentRequest(
+                order.getOrderId(),
+                request.cardType(),
+                request.cardNo(),
+                (long) order.getFinalPrice().amount(),
+                callbackUrl  // 서버에서 생성한 콜백 URL
+        );
 
-    public OrderInfoDetail getOrderInfoByPaymentId(String userId, String paymentId) {
-        Order order = orderService.findByPaymentId(paymentId)
-                .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "주문을 찾을 수 없습니다."));
-        return OrderInfoDetail.from(order);
+        sendPgPaymentAsync(orderId, pgRequest);
+
+        return OrderInfo.from(order);
     }
 }

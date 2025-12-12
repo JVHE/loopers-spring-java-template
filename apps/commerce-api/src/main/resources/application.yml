@@ -45,36 +45,43 @@ commerce:
 
 # Resilience4j 설정
 resilience4j:
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 1s
+        ignoreExceptions:
+          - java.util.NoSuchElementException
+    instances:
+      pgRetry:
+        base-config: default
+        fail-after-max-attempts: true
+        retry-exceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - feign.RetryableException
+          - feign.FeignException.InternalServerError
+          - org.springframework.web.client.ResourceAccessException
+        ignore-exceptions:
+          - feign.FeignException.NotFound
+    retry-aspect-order: 2
   circuitbreaker:
     instances:
       pgCircuit:
         sliding-window-size: 10
-        failure-rate-threshold: 50       # 실패율 50% 넘으면 Open
-        wait-duration-in-open-state: 10s # Open 상태 유지 시간
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 2
-        slow-call-duration-threshold: 2s  # 2초 이상이면 느린 호출로 간주
-        slow-call-rate-threshold: 50      # 느린 호출 비율 50% 넘으면 Open
+        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 50
         record-exceptions:
           - java.net.SocketTimeoutException
           - java.net.ConnectException
           - feign.RetryableException
           - org.springframework.web.client.ResourceAccessException
-
-  retry:
-    instances:
-      pgRetry:
-        max-attempts: 3
-        wait-duration: 1s
-        retry-exceptions:
-          - feign.RetryableException
-          - java.net.SocketTimeoutException
-        fail-after-max-attempts: true
-
-  timelimiter:
-    instances:
-      pgTimeout:
-        timeout-duration: 3s
-
+        ignore-exceptions:
+          - feign.FeignException.NotFound
+    circuit-breaker-aspect-order: 1
 # FeignClient 설정 (선택)
 feign:
   client:

@@ -23,11 +23,6 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
-    public Optional<Order> findByPaymentId(String paymentId) {
-        return orderJpaRepository.findByPgPaymentId(paymentId);
-    }
-
-    @Override
     public List<Order> findPendingPaymentOrdersBefore(ZonedDateTime before) {
         return orderJpaRepository.findByStatusAndCreatedAtBefore(OrderStatus.PENDING, before);
     }
@@ -38,12 +33,22 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Optional<Order> findById(Long orderId) {
+        return orderJpaRepository.findById(orderId);
+    }
+
+    @Override
     public Page<Order> findByUserIdAndDeletedAtIsNull(Long userId, Pageable pageable) {
         return orderJpaRepository.findByUserIdAndDeletedAtIsNull(userId, pageable);
     }
 
     @Override
-    public Optional<Order> findById(Long orderId) {
-        return orderJpaRepository.findById(orderId);
+    public Optional<Order> findByOrderId(String orderId) {
+        return orderJpaRepository.findByOrderId(orderId);
+    }
+
+    @Override
+    public Optional<Order> findByIdAndUserIdForUpdate(Long orderId, Long userId) {
+        return orderJpaRepository.findByIdAndUserIdForUpdate(orderId, userId);
     }
 }

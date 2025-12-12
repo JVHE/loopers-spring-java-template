@@ -1,6 +1,6 @@
 package com.loopers.domain.order;
 
-public enum PaymentFailureReason {
+public enum PaymentReason {
     LIMITED_FUNDS,
     INVALID_CARD,
     TIMEOUT,
