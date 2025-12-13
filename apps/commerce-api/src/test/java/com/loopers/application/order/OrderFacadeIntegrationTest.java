@@ -421,8 +421,15 @@ public class OrderFacadeIntegrationTest {
             Point point = pointJpaRepository.findByUserId(userEntityId).orElseThrow();
             assertThat(point.getAmount()).isEqualTo(65000); // 100000 - 35000
 
-            // assert - 쿠폰 사용 확인 (이벤트 핸들러가 처리될 때까지 대기)
-            Thread.sleep(2000); // 이벤트 핸들러 처리 대기
+            // assert - 쿠폰 사용 확인 (이벤트 핸들러가 처리될 때까지 대기 - 폴링 방식)
+            long deadline = System.currentTimeMillis() + 5000; // 최대 5초 대기
+            while (System.currentTimeMillis() < deadline) {
+                Coupon coupon = couponJpaRepository.findById(couponId).orElseThrow();
+                if (coupon.isUsed()) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             Coupon usedCoupon = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(usedCoupon.isUsed()).isTrue();
         }
@@ -467,8 +474,15 @@ public class OrderFacadeIntegrationTest {
             Point point = pointJpaRepository.findByUserId(userEntityId).orElseThrow();
             assertThat(point.getAmount()).isEqualTo(68000); // 100000 - 32000
 
-            // assert - 쿠폰 사용 확인 (이벤트 핸들러가 처리될 때까지 대기)
-            Thread.sleep(2000); // 이벤트 핸들러 처리 대기
+            // assert - 쿠폰 사용 확인 (이벤트 핸들러가 처리될 때까지 대기 - 폴링 방식)
+            long deadline = System.currentTimeMillis() + 5000; // 최대 5초 대기
+            while (System.currentTimeMillis() < deadline) {
+                Coupon coupon = couponJpaRepository.findById(couponId).orElseThrow();
+                if (coupon.isUsed()) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             Coupon usedCoupon = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(usedCoupon.isUsed()).isTrue();
         }

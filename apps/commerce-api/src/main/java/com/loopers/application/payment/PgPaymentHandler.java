@@ -24,7 +24,6 @@ public class PgPaymentHandler implements OrderCreatedEventHandler {
     private final PaymentCallbackUrlGenerator callbackUrlGenerator;
 
     @Override
-    @EventListener
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async("eventTaskExecutor")
     public void handleOrderCreated(OrderEvent.OrderCreatedEvent event) {

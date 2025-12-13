@@ -10,12 +10,9 @@ import com.loopers.infrastructure.cache.RedisCacheKeyConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -60,7 +57,7 @@ public class ProductCacheService implements LikeProductEventHandler {
         try {
             Optional<ProductInfo> productInfo = objectMapper.readValue(
                     productInfoString,
-            objectMapper.getTypeFactory().constructParametricType(Optional.class, ProductInfo.class)
+                    objectMapper.getTypeFactory().constructParametricType(Optional.class, ProductInfo.class)
             );
             return Optional.ofNullable(productInfo);
         } catch (JsonProcessingException e) {
@@ -127,7 +124,6 @@ public class ProductCacheService implements LikeProductEventHandler {
     }
 
     @Override
-    @EventListener
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async("eventTaskExecutor")
     public void handleLikeProductEvent(LikeProductEvent event) {

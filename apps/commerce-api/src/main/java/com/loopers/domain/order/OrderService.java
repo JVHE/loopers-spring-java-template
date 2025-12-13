@@ -26,10 +26,12 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderEventPublisher eventPublisher;
 
+    @Transactional
     public Order save(Order order) {
         return orderRepository.save(order);
     }
 
+    @Transactional
     public Order createOrder(Map<Product, Integer> productQuantityMap, Long userId, DiscountResult discountResult, PaymentMethod paymentMethod) {
         List<OrderItem> orderItems = new ArrayList<>();
         productQuantityMap.forEach((product, quantity) -> orderItems.add(OrderItem.create(
@@ -39,6 +41,7 @@ public class OrderService {
                 product.getPrice()
         )));
         Order order = Order.create(userId, orderItems, discountResult, paymentMethod);
+        order = orderRepository.save(order);
 
         eventPublisher.publishOrderCreated(
                 OrderEvent.createOrderCreatedEvent(
@@ -50,7 +53,7 @@ public class OrderService {
                         order.getPaymentMethod()
                 )
         );
-        return orderRepository.save(order);
+        return order;
     }
 
     public Order getOrderByIdAndUserId(Long orderId, Long userId) {

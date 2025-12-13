@@ -8,7 +8,6 @@ import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -45,14 +44,8 @@ public class CouponService implements OrderCreatedEventHandler {
                 .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "쿠폰을 찾을 수 없습니다."));
     }
 
-    /**
-     * 주문 생성 후 쿠폰 사용 처리
-     * - AFTER_COMMIT: 주문이 확정된 후 쿠폰 사용 처리
-     * - 주문이 실패하면 쿠폰도 사용되지 않아야 함
-     */
     @Override
-    @EventListener
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async("eventTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleOrderCreated(OrderEvent.OrderCreatedEvent event) {

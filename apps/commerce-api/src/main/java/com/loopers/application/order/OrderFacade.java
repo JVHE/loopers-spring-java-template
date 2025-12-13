@@ -205,7 +205,6 @@ public class OrderFacade {
                 callbackUrl
         );
 
-        // 재결제는 직접 처리 (이벤트 발행 없이)
         pgPaymentExecutor.requestPaymentAsync(pgRequest)
                 .thenAccept(pgResponse -> {
                     orderService.updateStatusByPgResponse(orderId, pgResponse);

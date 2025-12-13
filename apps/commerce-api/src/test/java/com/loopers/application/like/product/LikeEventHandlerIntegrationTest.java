@@ -116,9 +116,15 @@ public class LikeEventHandlerIntegrationTest {
             // act
             likeProductFacade.likeProduct(userId, productId);
 
-            // assert - 비동기 처리를 위해 대기
-            Thread.sleep(2000); // 이벤트 핸들러 처리 대기
-
+            // assert - 비동기 처리를 위해 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 5000; // 최대 5초 대기
+            while (System.currentTimeMillis() < deadline) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 1) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics updatedMetrics = productMetricsService.getMetricsByProductId(productId);
             assertThat(updatedMetrics.getLikeCount()).isEqualTo(1);
 
@@ -138,17 +144,27 @@ public class LikeEventHandlerIntegrationTest {
         void should_notIncrementLikeCount_when_duplicateLike() throws InterruptedException {
             // arrange
             likeProductFacade.likeProduct(userId, productId);
-            Thread.sleep(1000); // 첫 번째 이벤트 처리 대기
-
+            
+            // 첫 번째 이벤트 처리 대기 (폴링 방식)
+            long deadline1 = System.currentTimeMillis() + 3000;
+            while (System.currentTimeMillis() < deadline1) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 1) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfterFirstLike = productMetricsService.getMetricsByProductId(productId);
             assertThat(metricsAfterFirstLike.getLikeCount()).isEqualTo(1);
 
             // act - 같은 사용자가 다시 좋아요 등록
             likeProductFacade.likeProduct(userId, productId);
 
-            // assert - 비동기 처리 대기
-            Thread.sleep(1000);
-
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline2 = System.currentTimeMillis() + 2000;
+            while (System.currentTimeMillis() < deadline2) {
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfterSecondLike = productMetricsService.getMetricsByProductId(productId);
             // 중복 좋아요는 이벤트가 발행되지 않으므로 카운트가 증가하지 않음
             assertThat(metricsAfterSecondLike.getLikeCount()).isEqualTo(1);
@@ -171,14 +187,33 @@ public class LikeEventHandlerIntegrationTest {
             ProductMetrics initialMetrics = productMetricsService.getMetricsByProductId(productId);
             assertThat(initialMetrics.getLikeCount()).isEqualTo(0);
 
-            // act - 여러 사용자가 동시에 좋아요 등록
+            // act - 여러 사용자가 동시에 좋아요 등록 (실제 동시 실행)
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(userCount);
+            java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(userCount);
+            
             for (int i = 0; i < userCount; i++) {
-                likeProductFacade.likeProduct(userIds[i], productId);
+                final int index = i;
+                executor.submit(() -> {
+                    try {
+                        likeProductFacade.likeProduct(userIds[index], productId);
+                    } finally {
+                        latch.countDown();
+                    }
+                });
             }
+            
+            latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            executor.shutdown();
 
-            // assert - 비동기 처리 대기
-            Thread.sleep(3000); // 여러 이벤트 처리 대기
-
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 5000; // 최대 5초 대기
+            while (System.currentTimeMillis() < deadline) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == userCount) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics finalMetrics = productMetricsService.getMetricsByProductId(productId);
             assertThat(finalMetrics.getLikeCount()).isEqualTo(userCount);
 
@@ -205,17 +240,31 @@ public class LikeEventHandlerIntegrationTest {
         void should_decrementLikeCount_async_when_unlikeProduct() throws InterruptedException {
             // arrange
             likeProductFacade.likeProduct(userId, productId);
-            Thread.sleep(1000); // 좋아요 등록 이벤트 처리 대기
-
+            
+            // 좋아요 등록 이벤트 처리 대기 (폴링 방식)
+            long deadline1 = System.currentTimeMillis() + 3000;
+            while (System.currentTimeMillis() < deadline1) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 1) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfterLike = productMetricsService.getMetricsByProductId(productId);
             assertThat(metricsAfterLike.getLikeCount()).isEqualTo(1);
 
             // act
             likeProductFacade.unlikeProduct(userId, productId);
 
-            // assert - 비동기 처리 대기
-            Thread.sleep(2000);
-
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline2 = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline2) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 0) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfterUnlike = productMetricsService.getMetricsByProductId(productId);
             assertThat(metricsAfterUnlike.getLikeCount()).isEqualTo(0);
 
@@ -240,9 +289,11 @@ public class LikeEventHandlerIntegrationTest {
             // act - 좋아요 없이 취소
             likeProductFacade.unlikeProduct(userId, productId);
 
-            // assert - 비동기 처리 대기
-            Thread.sleep(1000);
-
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 2000;
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfterUnlike = productMetricsService.getMetricsByProductId(productId);
             // 좋아요가 없으면 이벤트가 발행되지 않으므로 카운트가 감소하지 않음
             assertThat(metricsAfterUnlike.getLikeCount()).isEqualTo(0);
@@ -258,35 +309,55 @@ public class LikeEventHandlerIntegrationTest {
             // act & assert
             // 좋아요 3개 등록
             likeProductFacade.likeProduct(userId, productId);
-            Thread.sleep(500);
             likeProductFacade.likeProduct(userId, productId); // 중복 (카운트 증가 안 함)
-            Thread.sleep(500);
             
             // 다른 사용자 2명 추가
             User user2 = userService.registerUser("user2", "user2@test.com", "1993-03-13", "male");
             User user3 = userService.registerUser("user3", "user3@test.com", "1993-03-13", "male");
             likeProductFacade.likeProduct(user2.getUserId(), productId);
-            Thread.sleep(500);
             likeProductFacade.likeProduct(user3.getUserId(), productId);
-            Thread.sleep(2000); // 이벤트 처리 대기
-
+            
+            // 이벤트 처리 대기 (폴링 방식)
+            long deadline1 = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline1) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 3) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfter3Likes = productMetricsService.getMetricsByProductId(productId);
             assertThat(metricsAfter3Likes.getLikeCount()).isEqualTo(3);
 
             // 좋아요 2개 취소
             likeProductFacade.unlikeProduct(userId, productId);
-            Thread.sleep(500);
             likeProductFacade.unlikeProduct(user2.getUserId(), productId);
-            Thread.sleep(2000); // 이벤트 처리 대기
-
+            
+            // 이벤트 처리 대기 (폴링 방식)
+            long deadline2 = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline2) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 1) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics metricsAfter2Unlikes = productMetricsService.getMetricsByProductId(productId);
             assertThat(metricsAfter2Unlikes.getLikeCount()).isEqualTo(1);
 
             // 좋아요 1개 더 등록
             User user4 = userService.registerUser("user4", "user4@test.com", "1993-03-13", "male");
             likeProductFacade.likeProduct(user4.getUserId(), productId);
-            Thread.sleep(2000); // 이벤트 처리 대기
-
+            
+            // 이벤트 처리 대기 (폴링 방식)
+            long deadline3 = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline3) {
+                ProductMetrics metrics = productMetricsService.getMetricsByProductId(productId);
+                if (metrics.getLikeCount() == 2) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics finalMetrics = productMetricsService.getMetricsByProductId(productId);
             assertThat(finalMetrics.getLikeCount()).isEqualTo(2);
         }
@@ -318,9 +389,16 @@ public class LikeEventHandlerIntegrationTest {
             likeProductFacade.likeProduct(userId, productId);
             likeProductFacade.likeProduct(userId, productId2);
 
-            // assert - 비동기 처리 대기
-            Thread.sleep(2000);
-
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline) {
+                ProductMetrics currentMetrics1 = productMetricsService.getMetricsByProductId(productId);
+                ProductMetrics currentMetrics2 = productMetricsService.getMetricsByProductId(productId2);
+                if (currentMetrics1.getLikeCount() == 1 && currentMetrics2.getLikeCount() == 1) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             ProductMetrics finalMetrics1 = productMetricsService.getMetricsByProductId(productId);
             ProductMetrics finalMetrics2 = productMetricsService.getMetricsByProductId(productId2);
 

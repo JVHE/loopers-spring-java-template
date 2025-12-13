@@ -117,8 +117,13 @@ public class CouponEventHandlerIntegrationTest {
 
             // act
             eventPublisher.publishEvent(event);
-            Thread.sleep(1000);
-
+            
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 2000; // 최대 2초 대기
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(50);
+            }
+            
             // assert - 예외가 발생하지 않아야 함
             Coupon coupon = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(coupon.isUsed()).isFalse(); // 여전히 사용되지 않음
@@ -128,27 +133,33 @@ public class CouponEventHandlerIntegrationTest {
         @Test
         void should_notAffectOrder_when_couponAlreadyUsed() throws InterruptedException {
             // arrange
+            // 이미 사용된 쿠폰으로 설정
             Coupon coupon = couponJpaRepository.findById(couponId).orElseThrow();
             coupon.markAsUsed();
             couponJpaRepository.save(coupon);
 
-            Price originalPrice = new Price(10000);
-            DiscountResult discountResult = couponService.calculateDiscount(couponId, userId, originalPrice);
-
+            // 이미 사용된 쿠폰으로 이벤트 발행 (주문은 이미 생성되었다고 가정)
+            // 이벤트 핸들러에서 이미 사용된 쿠폰을 처리하려고 시도하지만 예외가 발생하고 로그만 남김
             OrderEvent.OrderCreatedEvent event = OrderEvent.createOrderCreatedEvent(
                     1L,
                     "order-123",
                     userId,
                     couponId,
-                    discountResult.finalPrice(),
+                    new Price(5000), // 할인 후 금액 (이미 계산된 것으로 가정)
                     com.loopers.domain.order.PaymentMethod.POINT
             );
 
-            // act
+            // act - 이벤트 발행 (이벤트 핸들러에서 예외가 발생하지만 주문에는 영향 없음)
             eventPublisher.publishEvent(event);
-            Thread.sleep(1000);
-
+            
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 2000; // 최대 2초 대기
+            while (System.currentTimeMillis() < deadline) {
+                Thread.sleep(50);
+            }
+            
             // assert - 이벤트 핸들러에서 예외가 발생하지만 로그만 남기고 주문에는 영향 없음
+            // 쿠폰은 여전히 사용된 상태로 유지됨
             Coupon couponAfter = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(couponAfter.isUsed()).isTrue(); // 여전히 사용된 상태
         }
@@ -177,9 +188,15 @@ public class CouponEventHandlerIntegrationTest {
 
             eventPublisher.publishEvent(event);
 
-            // assert - 비동기 처리 대기
-            Thread.sleep(2000);
-
+            // assert - 비동기 처리 대기 (폴링 방식)
+            long deadline = System.currentTimeMillis() + 5000; // 최대 5초 대기
+            while (System.currentTimeMillis() < deadline) {
+                Coupon coupon = couponJpaRepository.findById(couponId).orElseThrow();
+                if (coupon.isUsed()) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
             Coupon couponAfter = couponJpaRepository.findById(couponId).orElseThrow();
             assertThat(couponAfter.isUsed()).isTrue();
         }

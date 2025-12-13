@@ -6,7 +6,6 @@ import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
@@ -74,7 +73,6 @@ public class ProductMetricsService implements LikeProductEventHandler {
     }
 
     @Override
-    @EventListener
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async("eventTaskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
